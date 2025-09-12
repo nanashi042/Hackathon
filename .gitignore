@@ -65,7 +65,6 @@ media/
 local_settings.py
 
 # --- ML / Model artifacts & datasets ---
-*.onnx
 *.pkl
 *.pt
 *.bin
@@ -75,8 +74,11 @@ checkpoints/
 *.tfevents.*
 BackEnd/gemma2b_deepface/
 BackEnd/api/models/*.pkl
-BackEnd/api/models/*.onnx
 BackEnd/api/utils/student_depression_dataset.csv
+
+# Keep ONNX models for production
+# *.onnx
+# BackEnd/api/models/*.onnx
 
 # --- Node / Frontend (Vite/React) ---
 FrontEnd/node_modules/

@@ -4,8 +4,7 @@ from api.utils.inference import diagnose_text
 from api.utils.remedies import personalize_remedies
 from api.utils.analysis import DeepFaceAnalyzer
 from django.core.files.storage import default_storage
-from api.utils.chatbot import bot
-from api.utils.gemma import gemma
+from api.utils.gemma_runtime import gemma
 
 @api_view(['POST'])
 def diagnose_api(request):
@@ -96,11 +95,6 @@ def upload_video(request):
     })
 
 
-@api_view(['POST'])
-def chat_intent(request):
-    text = request.data.get('text', '')
-    reply = bot.respond(text or "")
-    return Response({"reply": reply})
 
 
 @api_view(['POST'])
@@ -112,5 +106,4 @@ def chat_generate(request):
         output = gemma.generate(text)
         return Response({"reply": output})
     except Exception as e:
-        # Fallback to intent bot if generator is unavailable
-        return Response({"reply": bot.respond(text), "fallback": True})
+        return Response({"error": f"Generation failed: {str(e)}"}, status=500)
