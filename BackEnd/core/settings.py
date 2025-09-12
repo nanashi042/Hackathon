@@ -73,7 +73,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'core.wsgi.application'
-APPEND_SLASH = True
+APPEND_SLASH = False
 
 
 # Database

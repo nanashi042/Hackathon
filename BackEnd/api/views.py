@@ -1,3 +1,4 @@
+from django.http import HttpResponse
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from api.utils.inference import diagnose_text
@@ -107,3 +108,6 @@ def chat_generate(request):
         return Response({"reply": output})
     except Exception as e:
         return Response({"error": f"Generation failed: {str(e)}"}, status=500)
+    
+def home(request):
+    return HttpResponse("SUP Bhadwo")

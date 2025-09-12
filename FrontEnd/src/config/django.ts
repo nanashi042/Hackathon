@@ -29,8 +29,8 @@ export const API_ENDPOINTS = {
   
   // Media Analysis (DeepFace)
   ANALYSIS: {
-    UPLOAD_IMAGE: '/analysis/image',
-    UPLOAD_VIDEO: '/analysis/video',
+    UPLOAD_IMAGE: '/analysis/image/',
+    UPLOAD_VIDEO: '/analysis/video/',
     GET_RESULTS: '/analysis/results',
     BATCH_ANALYSIS: '/analysis/batch',
   },
