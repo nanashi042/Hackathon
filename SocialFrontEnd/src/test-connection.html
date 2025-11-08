@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Supabase Connection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        .test-result {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        .success { background-color: rgba(76, 175, 80, 0.8); }
+        .error { background-color: rgba(244, 67, 54, 0.8); }
+        .loading { background-color: rgba(255, 152, 0, 0.8); }
+        button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        pre {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+        .step {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Supabase Connection Test</h1>
+        <p>This will test your Depresso Assist server connection and database setup.</p>
+        
+        <button onclick="runTests()">🧪 Run Connection Tests</button>
+        
+        <div id="results"></div>
+        
+        <div id="instructions" style="display: none;">
+            <h2>📋 Setup Instructions</h2>
+            
+            <div class="step">
+                <h3>1. Deploy Edge Function</h3>
+                <pre>npm install -g supabase
+supabase login
+supabase link --project-ref lrfnjxurfljfbboguriq
+supabase functions deploy server</pre>
+            </div>
+            
+            <div class="step">
+                <h3>2. Run Database Migration</h3>
+                <p>Go to Supabase Dashboard → SQL Editor and run:</p>
+                <pre>-- Copy the entire content from /supabase/database-schema.sql</pre>
+            </div>
+            
+            <div class="step">
+                <h3>3. Verify Setup</h3>
+                <p>Run this test again to confirm everything is working!</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PROJECT_ID = 'lrfnjxurfljfbboguriq';
+        const BASE_URL = `https://${PROJECT_ID}.supabase.co/functions/v1/make-server-8532b137`;
+        
+        async function runTests() {
+            const resultsDiv = document.getElementById('results');
+            const instructionsDiv = document.getElementById('instructions');
+            
+            resultsDiv.innerHTML = '<div class="test-result loading">🔄 Running tests...</div>';
+            
+            let allTestsPassed = true;
+            let html = '<h2>🧪 Test Results</h2>';
+            
+            // Test 1: Server Health
+            try {
+                html += '<h3>Test 1: Server Health Check</h3>';
+                const healthResponse = await fetch(`${BASE_URL}/health`);
+                
+                if (healthResponse.ok) {
+                    const healthData = await healthResponse.json();
+                    html += '<div class="test-result success">✅ Server is running</div>';
+                    html += `<pre>${JSON.stringify(healthData, null, 2)}</pre>`;
+                    
+                    if (healthData.database === 'connected') {
+                        html += '<div class="test-result success">✅ Database is connected</div>';
+                    } else if (healthData.database === 'migration_required') {
+                        html += '<div class="test-result error">❌ Database migration required</div>';
+                        allTestsPassed = false;
+                    } else {
+                        html += '<div class="test-result error">❌ Database error: ' + healthData.database + '</div>';
+                        allTestsPassed = false;
+                    }
+                } else {
+                    html += '<div class="test-result error">❌ Server not responding (HTTP ' + healthResponse.status + ')</div>';
+                    allTestsPassed = false;
+                }
+            } catch (error) {
+                html += '<div class="test-result error">❌ Connection failed: ' + error.message + '</div>';
+                allTestsPassed = false;
+            }
+            
+            // Test 2: Database Check
+            try {
+                html += '<h3>Test 2: Database Tables Check</h3>';
+                const dbResponse = await fetch(`${BASE_URL}/check-database`);
+                
+                if (dbResponse.ok) {
+                    const dbData = await dbResponse.json();
+                    html += `<pre>${JSON.stringify(dbData, null, 2)}</pre>`;
+                    
+                    if (dbData.database && dbData.database.migrationComplete) {
+                        html += '<div class="test-result success">✅ All database tables exist</div>';
+                    } else {
+                        html += '<div class="test-result error">❌ Database tables missing</div>';
+                        allTestsPassed = false;
+                    }
+                } else {
+                    html += '<div class="test-result error">❌ Database check failed</div>';
+                    allTestsPassed = false;
+                }
+            } catch (error) {
+                html += '<div class="test-result error">❌ Database check error: ' + error.message + '</div>';
+                allTestsPassed = false;
+            }
+            
+            // Summary
+            html += '<h3>📊 Summary</h3>';
+            if (allTestsPassed) {
+                html += '<div class="test-result success">🎉 All tests passed! Your app should work perfectly.</div>';
+                instructionsDiv.style.display = 'none';
+            } else {
+                html += '<div class="test-result error">❌ Some tests failed. Follow the setup instructions below.</div>';
+                instructionsDiv.style.display = 'block';
+            }
+            
+            // Quick links
+            html += '<h3>🔗 Quick Links</h3>';
+            html += `<p><strong>Health Check:</strong> <a href="${BASE_URL}/health" target="_blank">${BASE_URL}/health</a></p>`;
+            html += `<p><strong>Supabase Dashboard:</strong> <a href="https://supabase.com/dashboard/project/${PROJECT_ID}" target="_blank">Open Dashboard</a></p>`;
+            
+            resultsDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

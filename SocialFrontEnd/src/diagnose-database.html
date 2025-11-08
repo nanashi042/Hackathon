@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Depresso Assist - Database Diagnosis</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        .status.ok {
+            background-color: rgba(76, 175, 80, 0.8);
+        }
+        .status.error {
+            background-color: rgba(244, 67, 54, 0.8);
+        }
+        .status.warning {
+            background-color: rgba(255, 152, 0, 0.8);
+        }
+        button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        .code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .steps {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .step:last-child {
+            border-bottom: none;
+        }
+        #results {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Depresso Assist Database Diagnosis</h1>
+        <p>This tool will help you diagnose database issues and check if the migration has been run properly.</p>
+        
+        <div>
+            <label for="projectId">Supabase Project ID:</label>
+            <input type="text" id="projectId" placeholder="your-project-id" style="padding: 8px; margin: 10px; border-radius: 4px; border: none; width: 300px;">
+        </div>
+        
+        <button onclick="runDiagnosis()">🔍 Run Diagnosis</button>
+        <button onclick="showMigrationSteps()">📋 Show Migration Steps</button>
+        
+        <div id="results"></div>
+        
+        <div id="migrationSteps" style="display: none;">
+            <h2>📋 Database Migration Steps</h2>
+            <div class="steps">
+                <div class="step">
+                    <strong>Step 1:</strong> Go to your Supabase Dashboard
+                </div>
+                <div class="step">
+                    <strong>Step 2:</strong> Navigate to <strong>SQL Editor</strong>
+                </div>
+                <div class="step">
+                    <strong>Step 3:</strong> Copy the SQL from <code>/supabase/database-schema.sql</code>
+                </div>
+                <div class="step">
+                    <strong>Step 4:</strong> Paste it in the SQL Editor
+                </div>
+                <div class="step">
+                    <strong>Step 5:</strong> Click <strong>Run</strong> to execute the migration
+                </div>
+                <div class="step">
+                    <strong>Step 6:</strong> Verify that 5 tables were created (profiles, posts, comments, conversations, messages)
+                </div>
+            </div>
+            
+            <h3>Expected Tables After Migration:</h3>
+            <div class="code">
+✅ profiles - User profiles and settings<br>
+✅ posts - Community posts<br>
+✅ comments - Post comments<br>
+✅ conversations - Chat conversations<br>
+✅ messages - Chat messages
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function runDiagnosis() {
+            const projectId = document.getElementById('projectId').value.trim();
+            const resultsDiv = document.getElementById('results');
+            
+            if (!projectId) {
+                resultsDiv.innerHTML = '<div class="status error">❌ Please enter your Supabase Project ID</div>';
+                return;
+            }
+            
+            resultsDiv.innerHTML = '<div class="status warning">🔄 Running diagnosis...</div>';
+            
+            try {
+                // Test server health
+                const healthUrl = `https://${projectId}.supabase.co/functions/v1/make-server-8532b137/health`;
+                const healthResponse = await fetch(healthUrl);
+                const healthData = await healthResponse.json();
+                
+                let html = '<h2>🔍 Diagnosis Results</h2>';
+                
+                // Server status
+                if (healthResponse.ok) {
+                    html += '<div class="status ok">✅ Server is running</div>';
+                    
+                    // Database status
+                    if (healthData.database === 'connected') {
+                        html += '<div class="status ok">✅ Database is connected and tables exist</div>';
+                        html += '<div class="status ok">🎉 Your app should be working! Try signing up again.</div>';
+                    } else if (healthData.database === 'migration_required') {
+                        html += '<div class="status error">❌ Database migration required</div>';
+                        html += '<div class="status warning">⚠️ The profiles table does not exist. You need to run the database migration.</div>';
+                        html += '<button onclick="showMigrationSteps()">📋 Show Migration Steps</button>';
+                    } else {
+                        html += '<div class="status error">❌ Database connection error: ' + healthData.database + '</div>';
+                    }
+                } else {
+                    html += '<div class="status error">❌ Server is not responding</div>';
+                    html += '<div class="status warning">⚠️ Check your Project ID or Edge Function deployment</div>';
+                }
+                
+                // Test detailed database check
+                try {
+                    const dbCheckUrl = `https://${projectId}.supabase.co/functions/v1/make-server-8532b137/check-database`;
+                    const dbResponse = await fetch(dbCheckUrl);
+                    const dbData = await dbResponse.json();
+                    
+                    if (dbResponse.ok && dbData.database) {
+                        html += '<h3>📊 Detailed Database Status</h3>';
+                        html += `<div class="status ${dbData.database.profiles ? 'ok' : 'error'}">
+                            ${dbData.database.profiles ? '✅' : '❌'} Profiles table
+                        </div>`;
+                        html += `<div class="status ${dbData.database.posts ? 'ok' : 'error'}">
+                            ${dbData.database.posts ? '✅' : '❌'} Posts table
+                        </div>`;
+                        html += `<div class="status ${dbData.database.migrationComplete ? 'ok' : 'error'}">
+                            ${dbData.database.migrationComplete ? '✅' : '❌'} Migration complete
+                        </div>`;
+                    }
+                } catch (dbError) {
+                    html += '<div class="status warning">⚠️ Could not check detailed database status</div>';
+                }
+                
+                // Solution recommendations
+                html += '<h3>💡 Recommended Actions</h3>';
+                if (healthData.database === 'migration_required' || healthData.database === 'error') {
+                    html += '<div class="status warning">1. Run the database migration from /supabase/database-schema.sql</div>';
+                    html += '<div class="status warning">2. Check the migration guide at /supabase/MIGRATION_GUIDE.md</div>';
+                    html += '<div class="status warning">3. Verify your Supabase URL and Service Role Key environment variables</div>';
+                } else if (healthData.database === 'connected') {
+                    html += '<div class="status ok">✅ Everything looks good! Try your signup flow again.</div>';
+                } else {
+                    html += '<div class="status error">❌ Check your Supabase configuration and Edge Function deployment</div>';
+                }
+                
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="status error">❌ Connection failed: ${error.message}</div>
+                    <div class="status warning">⚠️ Check that your Project ID is correct and the Edge Function is deployed</div>
+                `;
+            }
+        }
+        
+        function showMigrationSteps() {
+            const stepsDiv = document.getElementById('migrationSteps');
+            stepsDiv.style.display = stepsDiv.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        // Auto-populate project ID if possible
+        window.onload = function() {
+            // Try to extract project ID from URL if running in Supabase environment
+            const hostname = window.location.hostname;
+            if (hostname.includes('.supabase.co')) {
+                const projectId = hostname.split('.')[0];
+                document.getElementById('projectId').value = projectId;
+            }
+        };
+    </script>
+</body>
+</html>
