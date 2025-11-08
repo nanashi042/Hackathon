@@ -4,9 +4,62 @@ import { UploadPage } from './components/UploadPage';
 import { AIChatPage } from './components/AIChatPage';
 import { CherryBlossomIcon } from './components/CherryBlossomIcon';
 import React from 'react';
+import { useEffect } from 'react';
+import { analysisBus } from './services/bus';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'upload' | 'chat'>('upload');
+
+  // When an analysis result is published, navigate to chat
+  useEffect(() => {
+    const unsub = analysisBus.subscribe(() => setCurrentPage('chat'));
+    return () => { unsub(); };
+  }, []);
+
+  // Cross-app integration: allow external triggers to open AI chat
+  useEffect(() => {
+    // 1) URL param support: ?openChat=1
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('openChat') === '1') {
+      setCurrentPage('chat');
+    }
+
+    // 2) postMessage support from social frontend
+    const onMessage = (event: MessageEvent) => {
+      const data: any = event.data || {};
+      if (data && data.type === 'OPEN_AI_CHAT') {
+        // Optional: forward context into chat via analysisBus
+        if (data.summary || data.advice) {
+          analysisBus.publish({
+            source: 'image',
+            summary: String(data.summary || ''),
+            advice: data.advice ? String(data.advice) : undefined,
+          });
+        }
+        setCurrentPage('chat');
+      }
+    };
+    window.addEventListener('message', onMessage);
+
+    // 3) Expose a global helper for direct invocation
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).openAIChat = (summary?: string, advice?: string) => {
+      if (summary || advice) {
+        analysisBus.publish({
+          source: 'image',
+          summary: summary || '',
+          advice,
+        });
+      }
+      setCurrentPage('chat');
+    };
+
+    return () => {
+      window.removeEventListener('message', onMessage);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (window as any).openAIChat;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen gradient-glossy-primary relative">
@@ -72,31 +125,7 @@ export default function App() {
           </div>
         </main>
         
-        {/* Enhanced footer with Japanese elements */}
-        <footer className="mt-auto">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-4 sm:pb-6">
-            <div className="glass-morphism rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-8 text-center">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6">
-                <div className="flex items-center gap-2 sm:gap-4">
-                  <CherryBlossomIcon size={16} className="text-sakura opacity-60 sm:hidden" />
-                  <CherryBlossomIcon size={20} className="text-sakura opacity-60 hidden sm:block" />
-                  <p className="text-xs sm:text-sm text-indigo font-medium">
-                    AI Mental Wellness Companion
-                  </p>
-                  <div className="w-2 h-2 bg-gradient-to-r from-sakura to-indigo rounded-full zen-pulse" />
-                </div>
-                <div className="text-center">
-                  <p className="text-xs text-subtle max-w-md mb-1">
-                    For immediate help, contact a licensed mental health professional
-                  </p>
-                  <p className="text-xs text-mist">
-                    Crisis Helpline: 9152987821 (KIRAN) • 91-44-2464-0050 (Sneha India)
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </footer>
+        
       </div>
     </div>
   );

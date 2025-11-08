@@ -21,15 +21,8 @@ interface Message {
 }
 
 export function AIChatPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      type: 'ai',
-      content: "Hello! I'm your gentle AI companion. Like a caring friend who understands the language of hearts, I'm here to listen and support you. Your feelings matter, and you're not alone. How is your heart today? 🌸",
-      timestamp: new Date(),
-      mood: 'happy'
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [lastAnalysisSummary, setLastAnalysisSummary] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -37,18 +30,10 @@ export function AIChatPage() {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Optional: initial welcome message
   useEffect(() => {
-    const welcome: Message = {
-      id: 'welcome',
-      type: 'system',
-      content: '🌸 Welcome! You are connected to the backend. Share how you feel today.',
-      timestamp: new Date(),
-      mood: 'neutral'
-    };
-    setMessages(prev => [...prev, welcome]);
     // Subscribe to analysis advice
     const unsub = analysisBus.subscribe((evt) => {
+      setIsTyping(true);
       const analysisMsg: Message = {
         id: crypto.randomUUID(),
         type: 'ai',
@@ -57,6 +42,41 @@ export function AIChatPage() {
         mood: 'caring'
       };
       setMessages(prev => [...prev, analysisMsg]);
+      // Store context for future user questions
+      setLastAnalysisSummary(`${evt.summary ?? ''}${evt.advice ? '\n\n' + evt.advice : ''}`.trim());
+
+      // If UploadPage already provided a Gemini recommendation in evt.advice, don't double-generate here
+      if (!evt.advice) {
+        (async () => {
+          try {
+            const system = 'You are a supportive assistant that only discusses mental health, emotional wellbeing, stress, anxiety, depression, coping strategies, and related topics. If asked about anything unrelated, briefly and kindly steer back to the user\'s wellbeing. Avoid clinical diagnoses or medical claims.';
+            const prompt = `${system}\n\nA user uploaded a ${evt.source}. Based on this summary, write a short, warm, 2-3 sentence, practical guidance without medical claims.\nSummary: ${evt.summary ?? ''}`;
+            const reply = await chatService.generate(prompt);
+            const aiResponse: Message = {
+              id: crypto.randomUUID(),
+              type: 'ai',
+              content: reply,
+              timestamp: new Date(),
+              mood: 'caring'
+            };
+            setMessages(prev => [...prev, aiResponse]);
+          } catch (err) {
+            const fallback: Message = {
+              id: crypto.randomUUID(),
+              type: 'system',
+              content: 'Unable to generate a response right now.',
+              timestamp: new Date(),
+              mood: 'neutral'
+            };
+            setMessages(prev => [...prev, fallback]);
+          } finally {
+            setIsTyping(false);
+          }
+        })();
+      } else {
+        // Advice already present, stop typing indicator after it is shown
+        setIsTyping(false);
+      }
     });
     return () => { unsub(); };
   }, []);
@@ -78,9 +98,13 @@ export function AIChatPage() {
 
     try {
       setIsTyping(true);
-      let reply = await chatService.generate(newMessage.content);
+      const system = "You are a supportive assistant that only discusses mental health, emotional wellbeing, stress, anxiety, depression, coping strategies, and related topics. If asked about anything unrelated, briefly and kindly steer back to the user's wellbeing. Avoid clinical diagnoses or medical claims.";
+      const contextPrefix = lastAnalysisSummary
+        ? `${system}\n\nUse the following emotional analysis context from the user's uploaded media to inform your response. Keep it brief, warm, and practical, without medical claims.\n\nContext:\n${lastAnalysisSummary}\n\nUser: ${newMessage.content}\nAssistant:`
+        : `${system}\n\nUser: ${newMessage.content}\nAssistant:`;
+      let reply = await chatService.generate(contextPrefix);
       if (!reply) {
-        reply = await chatService.sendIntent(newMessage.content);
+        reply = await chatService.sendIntent(contextPrefix);
       }
       const aiResponse: Message = {
         id: crypto.randomUUID(),
@@ -123,6 +147,13 @@ export function AIChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Also auto-scroll when typing state changes (to keep indicator visible)
+  useEffect(() => {
+    if (isTyping) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [isTyping]);
 
   return (
     <div className="space-y-8 sm:space-y-10 lg:space-y-12">
@@ -278,7 +309,7 @@ export function AIChatPage() {
         {/* Chat Section */}
         {/* Chat Interface */}
         <div className="lg:col-span-2 xl:col-span-3">
-          <Card className="h-[500px] sm:h-[600px] lg:h-[700px] xl:h-[750px] flex flex-col gradient-glossy-card shadow-2xl hover-lift">
+          <Card className="min-h-[500px] sm:min-h-[600px] lg:min-h-[700px] xl:min-h-[750px] flex flex-col gradient-glossy-card shadow-2xl hover-lift">
             <CardHeader className="border-b border-soft pb-4 sm:pb-6">
               <CardTitle className="text-lg sm:text-2xl lg:text-3xl text-gradient-primary flex flex-col sm:flex-row items-center gap-2 sm:gap-3 lg:gap-4 justify-center">
                 <CherryBlossomIcon size={24} className="text-sakura zen-pulse sm:hidden" />

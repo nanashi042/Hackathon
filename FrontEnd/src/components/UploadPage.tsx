@@ -3,7 +3,7 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Upload, Image, Video, Check, Shield, Brain, Heart } from "lucide-react";
 import { CherryBlossomIcon } from "./CherryBlossomIcon";
-import { analysisService } from "../services/analysis";
+import { analysisService, chatService } from "../services/analysis";
 import { analysisBus } from "../services/bus";
 
 export function UploadPage() {
@@ -61,23 +61,48 @@ export function UploadPage() {
       if (failures.length) {
         alert(`Some uploads failed: ${failures.map(f => f.error).join(', ')}`);
       } else {
-        const summaries = results
-          .map(r => r.analysis)
-          .filter(Boolean)
-          .map(a => `Diagnosis: ${a!.risk_level ?? 'n/a'} | Dominant Emotion: ${a!.emotional_analysis?.dominant_emotion ?? 'n/a'}`);
+        // Normalize backend analysis payloads
+        const normalized = results.map(r => {
+          const a: any = r.analysis || {};
+          if (a && a.emotions) {
+            const entries = Object.entries(a.emotions as Record<string, number>);
+            const dominant = entries.length ? entries.reduce((m, e) => (e[1] > m[1] ? e : m))[0] : 'n/a';
+            return {
+              diagnosis: a.diagnosis ?? 'unknown',
+              confidence: typeof a.confidence === 'number' ? a.confidence : undefined,
+              dominantEmotion: dominant,
+            };
+          }
+          return {
+            diagnosis: a?.risk_level ?? 'unknown',
+            confidence: a?.emotional_analysis?.emotion_confidence,
+            dominantEmotion: a?.emotional_analysis?.dominant_emotion ?? 'n/a',
+          };
+        });
+
+        const summaries = normalized.map(n => `Diagnosis: ${n.diagnosis ?? 'unknown'} | Dominant Emotion: ${n.dominantEmotion ?? 'n/a'}`);
         const advices = results.map(r => r.advice).filter(Boolean) as string[];
         const msg = [
           summaries.length ? summaries.join('\n') : 'Upload complete. Analysis finished.',
           advices.length ? `\nGuidance:\n${advices.join('\n\n')}` : ''
         ].join('');
+        // Show summary prompt to the user
         alert(msg);
 
-        // Publish to chat page
-        const first = results[0];
+        // After user acknowledges, send the same summary to Gemini for next-step recommendations
+        let aiRecommendation: string | undefined;
+        try {
+          const prompt = `Based on the following emotional analysis, provide 3-5 warm, practical next steps without medical claims. Keep it concise and actionable.\n\n${msg}`;
+          aiRecommendation = await chatService.generate(prompt);
+        } catch (e) {
+          aiRecommendation = undefined;
+        }
+
+        // Publish to chat page with the exact summary and Gemini recommendation
         analysisBus.publish({
           source: uploadedFiles[0]?.type.startsWith('image/') ? 'image' : 'video',
-          summary: summaries[0],
-          advice: first?.advice,
+          summary: msg,
+          advice: aiRecommendation,
         });
       }
     } catch (err) {
@@ -102,7 +127,7 @@ export function UploadPage() {
             <CherryBlossomIcon size={40} className="text-sakura hidden sm:block lg:hidden" animated />
             <CherryBlossomIcon size={48} className="text-sakura hidden lg:block" animated />
             <h2 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-gradient-accent">
-              Heart Analysis
+              Emotion Analysis
             </h2>
             <CherryBlossomIcon size={32} className="text-indigo sm:hidden" animated />
             <CherryBlossomIcon size={40} className="text-indigo hidden sm:block lg:hidden" animated />
@@ -277,7 +302,7 @@ export function UploadPage() {
                     <div className="flex items-center gap-3 sm:gap-4">
                       <CherryBlossomIcon size={20} className="text-white zen-pulse sm:hidden" />
                       <CherryBlossomIcon size={24} className="text-white zen-pulse hidden sm:block" />
-                      <span>Analyzing Heart...</span>
+                      <span>Analyzing Emotions...</span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-3 sm:gap-4">
